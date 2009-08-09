@@ -2,6 +2,7 @@
 
 require 'rubygems'
 require 'couchrest'
+require 'peach'
 
 #---[ Naive benchmarks ]------------------------------------------------
 
@@ -73,8 +74,8 @@ end
 # Perform individual inserts.
 delete_all(db)
 s = elapsed do
-  for i in 0...n
-    db.save_doc(items[i])
+  items.pmap do |item|
+    db.save_doc(item)
   end
 end
 puts "* %i inserts per second individually, for %i items over %0.2f seconds" % [n/s, n, s]
@@ -95,12 +96,14 @@ puts "* %i inserts per second as group, for %i items over %0.2f seconds" % [n/s,
 
 # Perform lookups by '_id'.
 s = elapsed do
-  for i in 0...n
-    item = db.get(i.to_s)
-    item["number"] == i or raise "Mismatch! Expected #{i}, got: #{item.inspect}"
+  (0...n).to_a.peach do |item_num|
+    item = db.get(item_num.to_s)
+    item["number"] == item_num or raise "Mismatch! Expected #{item_num}, got: #{item.inspect}"
   end
 end
 puts "* %i retrieves per second by '_id', for %i items over %0.2f seconds" % [n/s, n, s]
+
+2.times do
 
 # Retrieve documents by 'number'.
 #
@@ -110,17 +113,19 @@ puts "* %i retrieves per second by '_id', for %i items over %0.2f seconds" % [n/
 # want to use to perform lookups.  But the value to match with that key and
 # other options are provided at query time.
 s = elapsed do
-  for i in 1...n  # Lookup by number 0 fails. This could be a CouchDB bug.
-    result_set = db.view('kittens/number', :key => i)
+  (1...n).to_a.peach do |item_num|  # Lookup by number 0 fails. This could be a CouchDB bug.
+    result_set = db.view('kittens/number', :key => item_num)
     if result_set["total_rows"] > 0
       item = result_set["rows"].first["value"]
     else
       item = {}
     end
-    item["number"] == i or raise "Mismatch! Expected #{i}, got: #{result_set.inspect}"
+    item["number"] == item_num or raise "Mismatch! Expected #{item_num}, got: #{result_set.inspect}"
   end
 end
 puts "* %i retrieves per second by 'number', for %i items over %0.2f seconds" % [n/s, n, s]
+
+end
 
 # Retrieve multiple documents.
 #
@@ -150,9 +155,10 @@ actual == expected or raise "Mismatch! Expected #{expected}, got: #{result_set.i
 puts "* %i retrieves per second as group, for %i items over %0.2f seconds" % [n/s, n, s]
 
 =begin
-* 176 inserts per second individually, for 1000 items over 5.65 seconds
-* 1620 inserts per second as group, for 1000 items over 0.62 seconds
-* 404 retrieves per second by '_id', for 1000 items over 2.47 seconds
-* 237 retrieves per second by 'number', for 1000 items over 4.21 seconds
-* 9394 retrieves per second as group, for 1000 items over 0.11 seconds
+* 454 inserts per second individually, for 1000 items over 2.20 seconds
+* 4120 inserts per second as group, for 1000 items over 0.24 seconds
+* 586 retrieves per second by '_id', for 1000 items over 1.71 seconds
+* 365 retrieves per second by 'number', for 1000 items over 2.73 seconds
+* 512 retrieves per second by 'number', for 1000 items over 1.95 seconds
+* 7557 retrieves per second as group, for 1000 items over 0.13 seconds
 =end
